@@ -842,11 +842,12 @@ AI-platform-pipeline/
 ├── mini_research_mlops_project_spec.md  # file này
 ├── LICENSE
 ├── .gitignore
+├── .dockerignore
 ├── .env.example                       # chỉ keys/mẫu, không có secret thật
 ├── pyproject.toml
 ├── compose.yaml
 ├── Dockerfile.controller
-├── Dockerfile.runtime
+├── Dockerfile                          # runtime image; tên mặc định Docker sử dụng
 ├── Makefile                            # tùy chọn
 │
 ├── .github/
@@ -1176,13 +1177,13 @@ docker logs mini-ml-hello
 docker inspect --format '{{.State.ExitCode}}' mini-ml-hello
 docker rm mini-ml-hello
 
-# Khi đã viết Dockerfile.runtime:
-docker build -t mini-ml-runtime:dev -f Dockerfile.runtime .
-docker run --rm mini-ml-runtime:dev \
-  python examples/hello_job/run.py
+# Khi đã viết Dockerfile ở thư mục gốc:
+docker build --build-arg "GIT_SHA=$(git rev-parse HEAD)" -t mini-ml-runtime:dev .
+docker run --rm mini-ml-runtime:dev
+docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' mini-ml-runtime:dev
 ```
 
-Đường dẫn/entrypoint thực tế phụ thuộc Dockerfile và packaging bạn tạo. Lệnh manual đầu không cần Dockerfile; nếu image chưa có, Docker sẽ tải từ registry. Giữ container lại để inspect trước khi `docker rm`. Khi đã build image riêng, hiểu vì sao sửa source trên host không tự sửa image cũ.
+Lệnh manual đầu không cần Dockerfile; nếu image chưa có, Docker sẽ tải từ registry. Giữ container lại để inspect trước khi `docker rm`. Image tự build dùng `CMD` trong Dockerfile, còn label `org.opencontainers.image.revision` ghi commit SHA được truyền lúc build. Nếu source/Dockerfile chưa commit, SHA này chưa đại diện đầy đủ cho nội dung image; commit rồi build lại. Khi đã build image riêng, hiểu vì sao sửa source trên host không tự sửa image cũ.
 
 ### 15.5. Compose workflow khi tới M2
 
