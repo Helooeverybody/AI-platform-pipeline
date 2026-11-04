@@ -32,3 +32,28 @@ jobs:
 
       - name: Unit tests
         run: python -m pytest -q
+  docker:
+    name: Docker build and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build runtime image
+        run: docker build --build-arg "GIT_SHA=$(git rev-parse HEAD)" -t mini-ml-runtime:ci .
+
+      - name: Smoke test
+        run: |
+          output="$(docker run --rm mini-ml-runtime:ci)"
+          echo "$output"
+          test "$output" = "hello from a job"
+          docker run --rm mini-ml-runtime:ci python -c "import mini_ml"
+
+      - name: Check revision label
+        run: |
+          image_sha="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' mini-ml-runtime:ci)"
+          echo "$image_sha"
+          test "$image_sha" = "$(git rev-parse HEAD)"
