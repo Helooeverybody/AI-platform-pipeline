@@ -1,7 +1,7 @@
 # MINI RESEARCH MLOPS PLATFORM
 
 > **Project specification / tài liệu định hướng triển khai**  
-> Phiên bản: `v1.1` — 04/11/2026
+> Phiên bản: `v1.2` — 04/11/2026
 > Đối tượng: người mới học backend, Linux, networking, Docker và Kubernetes; đã có kiến thức cơ bản về Python/ML.  
 > Môi trường chính: **Ubuntu 24.04, laptop CPU-only, Docker, GitHub**.  
 > Mục tiêu: dự án **cá nhân, public trên GitHub**, dùng **dữ liệu tổng hợp**, không sử dụng tài nguyên hoặc dữ liệu nội bộ của công ty.
@@ -12,7 +12,7 @@
 
 **Mini Research MLOps Platform** là một nền tảng nhỏ mô phỏng cách nhóm nghiên cứu ML làm việc với hệ thống MLOps dùng chung:
 
-1. Researcher viết một command cho workload và file YAML mô tả experiment; bắt đầu bằng job `hello`, sau đó mới thêm job có state và toy ML.
+1. Researcher viết một command cho workload và file YAML mô tả experiment; sau bài `hello` ngắn để học Docker, chạy ngay một CPU classifier nhỏ, rồi mở rộng sang job có state và toy PyTorch.
 2. Researcher chạy CLI `mini-ml submit configs/hello.yaml`, về sau dùng config cho toy ML/mock prompt.
 3. Platform kiểm tra config, gắn định danh cho run và chuẩn bị môi trường thực thi.
 4. Platform khởi chạy một **job biệt lập** trong Docker (giai đoạn đầu), sau đó có thể dùng Kubernetes Job.
@@ -23,7 +23,7 @@
 9. Candidate PASS được release vào môi trường test, smoke test, xác nhận phiên bản thực chạy và diễn tập rollback.
 10. Mỗi thay đổi đi qua feature branch, pull request, CI và merge vào `main`; image được build/publish theo commit và kiểm tra deploy trong lab.
 
-**Điểm cốt lõi:** bạn đang tạo một **MLOps control plane thu nhỏ**. Bắt đầu bằng workload rất nhỏ để học *software engineering, execution, storage, reliability, security, evaluation và delivery*; toy model được thêm sau khi luồng MLOps cơ bản chạy được.
+**Điểm cốt lõi:** bạn đang tạo một **MLOps control plane thu nhỏ**. `hello` chỉ kiểm tra lifecycle container; CPU classifier là workload ML thật đầu tiên để học *software engineering, execution, data/version, metrics, artifacts, reliability, security, evaluation và delivery* trước khi dựng shared services.
 
 ### Kết quả cuối cùng cần demo được
 
@@ -47,7 +47,7 @@ Feature branch -> PR + CI -> main -> image@digest -> lab deploy
  Docker Job    Kubernetes Job (milestone cuối)
        \          /
         v        v
-     Generic job process (hello / counter / toy ML / mock prompt)
+     Generic job process (hello / CPU classifier / counter / PyTorch ML / mock prompt)
        |       |             |
        v       v             v
     MLflow   Dataset       Checkpoint
@@ -87,7 +87,7 @@ Sau khi hoàn thành, bạn phải có thể tự giải thích và chứng minh
 
 ### Nguyên tắc thiết kế xuyên suốt
 
-- **Thin vertical slice trước**: dùng `hello` job để học submit/status/logs/exit code, rồi stateful counter, mock prompt và toy model; không cần train ở ngày đầu.
+- **Thin vertical slice trước**: dùng `hello` job để học logs/exit code, rồi train CPU classifier nhỏ ngay trong M1b; counter/PyTorch/mock prompt mở rộng cùng job contract ở các milestone sau.
 - **Run identity khác execution attempt**: cùng một logical run có thể có nhiều lần chạy lại.
 - **Dữ liệu bền vững nằm ngoài container**: job có thể biến mất, metrics/checkpoints vẫn còn.
 - **Một job contract, nhiều workload**: platform chạy *một command được khai báo*, không hard-code một trainer hay algorithm cụ thể.
@@ -102,7 +102,7 @@ Sau khi hoàn thành, bạn phải có thể tự giải thích và chứng minh
 
 ### 2.1. MVP bắt buộc
 
-1. Một generic `hello` job và một stateful counter job để học lifecycle/checkpoint trước; sau đó thêm toy PyTorch MLP CPU và mock prompt/config refinement với dữ liệu tổng hợp.
+1. Một generic `hello` job để học lifecycle; ngay sau đó train CPU classifier nhỏ trên dữ liệu tổng hợp, lưu metric/model artifact. Stateful counter học checkpoint ở M4; toy PyTorch MLP CPU và mock prompt/config refinement mở rộng ở M5.
 2. Public GitHub repo có README, tests, `.gitignore`, hướng dẫn branch/PR, GitHub Actions và lịch sử PR đã merge vào `main`.
 3. Docker image cho các jobs/controller; Docker Compose cho shared infrastructure.
 4. PostgreSQL, MLflow Tracking Server, SeaweedFS S3-compatible object storage.
@@ -144,7 +144,7 @@ Sau khi hoàn thành, bạn phải có thể tự giải thích và chứng minh
 
 ### Persona A — Researcher
 
-- Có một command trong repo, ban đầu là `hello` job, sau đó là counter/toy model/mock prompt workload.
+- Có một command trong repo, bắt đầu bằng `hello` để kiểm tra Docker, tiếp theo là CPU classifier thật; sau đó thêm counter/PyTorch/mock prompt workload.
 - Tạo `configs/exp01.yaml`.
 - Submit; không cần SSH vào job container để train thủ công.
 - Theo dõi trạng thái, log, metric, artifact và checkpoint khi workload có state.
@@ -166,6 +166,7 @@ Sau khi hoàn thành, bạn phải có thể tự giải thích và chứng minh
 [ ] Một feature branch được push, tạo PR, CI pass, review/merge vào `main`; branch mới tách từ `main` đã cập nhật.
 [ ] docker compose up khởi động PostgreSQL + MLflow + SeaweedFS.
 [ ] CLI submit `hello` job tạo run_id, lưu DB, khởi chạy Docker job; status/log/exit code đúng.
+[ ] CPU classifier train trên synthetic dataset bằng host và Docker, ghi validation metric và model artifact có thể dùng lại.
 [ ] Training đọc dataset v1, ghi MLflow metric và artifact.
 [ ] Xóa job container, metrics/artifact vẫn còn.
 [ ] Kill stateful counter job giữa chừng và resume từ checkpoint đầy đủ gần nhất; sau đó thử toy ML.
@@ -238,7 +239,7 @@ Sau khi hoàn thành, bạn phải có thể tự giải thích và chứng minh
 - Launcher nhận **JobSpec** có validation, không tự quyết định model loss/metric.
 
 **Research workload (`examples/...`)**
-- `hello`, counter, mock prompt và toy ML tự implement logic; dùng common SDK cho tracking/storage/checkpoint khi cần.
+- `hello`, CPU classifier, counter, mock prompt và PyTorch toy ML tự implement logic; dùng common SDK cho tracking/storage/checkpoint khi cần.
 - Không biết platform chạy bằng Docker hay Kubernetes.
 
 **Round service (`mini_ml.rounds`)**
@@ -273,7 +274,7 @@ Sau khi hoàn thành, bạn phải có thể tự giải thích và chứng minh
 ### 5.2. Hai loại workload
 
 **Long-running services**: Controller API, MLflow, PostgreSQL, SeaweedFS (chạy/được quản lý bởi Compose hoặc deploy riêng).  
-**Finite jobs**: hello, counter, toy train, mock prompt, dev evaluation, gate evaluation (tạo theo request, kết thúc rồi biến mất).
+**Finite jobs**: hello, CPU classifier train, counter, PyTorch toy train, mock prompt, dev evaluation, gate evaluation (tạo theo request, kết thúc rồi biến mất).
 
 Đừng đặt PostgreSQL/MLflow vào cùng một Pod/container với mỗi job run.
 
@@ -385,7 +386,21 @@ checkpoint:
   resume_policy: auto_if_compatible
 ```
 
-**Đây là schema của project bạn tự xây**, không phải YAML chuẩn của Kubernetes/GitHub. Hãy validate các field này bằng Pydantic trước khi tạo job. Ở M1, `configs/hello.yaml` chỉ cần `experiment` và `execution`; thêm `source/resources/dataset/training/checkpoint` khi các milestone tương ứng thật sự dùng chúng.
+**Đây là schema của project bạn tự xây**, không phải YAML chuẩn của Kubernetes/GitHub. Hãy validate các field này bằng Pydantic trước khi tạo job. Ở M1a, `configs/hello.yaml` chỉ cần `experiment` và `execution`. M1b thêm `configs/cpu_train.yaml` với cùng hai nhóm field và command chạy CPU classifier; seed/dataset-generator parameters ghi cùng artifact/metrics. Thêm `source/resources/dataset/training/checkpoint` vào schema khi các milestone tương ứng thật sự dùng chúng.
+
+Mẫu tối thiểu cho `configs/cpu_train.yaml` ở M1b (image `:dev` chỉ dùng local; M3 pin image identity):
+
+```yaml
+experiment:
+  name: cpu-classifier-v1
+execution:
+  backend: docker
+  runtime_image: mini-ml-runtime:dev
+  command: [python, examples/cpu_classifier/train.py, --seed, "42", --output-dir, /outputs]
+  timeout_seconds: 120
+```
+
+`--output-dir /outputs` là đường dẫn **trong container**; khi chạy host dùng `--output-dir outputs/cpu_classifier`, còn Docker bind mount host directory vào `/outputs`. `model.json` chỉ là artifact số học/metadata của baseline binary classifier; trusted gate về sau parse schema này, không deserialize pickle/joblib không đáng tin.
 
 **Lưu ý:** ví dụ đầy đủ này thuộc M5a, sau job `hello` và control plane cơ bản. Lệnh module `examples.toy_classifier.train` chỉ hoạt động khi thư mục được đóng gói/import đúng; lúc học entrypoint có thể dùng `python examples/toy_classifier/train.py` rồi chuyển sang `python -m`.
 
@@ -859,6 +874,7 @@ AI-platform-pipeline/
 │
 ├── configs/
 │   ├── hello.yaml
+│   ├── cpu_train.yaml
 │   ├── round01.yaml
 │   ├── exp01.yaml
 │   └── prompt-v1.yaml
@@ -907,6 +923,9 @@ AI-platform-pipeline/
 ├── examples/
 │   ├── hello_job/
 │   │   └── run.py
+│   ├── cpu_classifier/
+│   │   ├── train.py
+│   │   └── predict.py
 │   ├── step_counter/
 │   │   └── run.py
 │   ├── mock_prompt/
@@ -976,20 +995,27 @@ Mỗi milestone gồm **kiến thức → việc xây → test → Definition of
 
 **DoD:** `python -m pytest` và CI pass; ít nhất một PR đã merge vào `main`; branch mới tách từ `main` cập nhật; repo không chứa secret/data nội bộ; giải thích được `commit`, `push`, PR và merge khác nhau.
 
-### M1 — Generic hello job chạy bằng Docker
+### M1 — Docker hello rồi CPU classifier nhỏ
 
 **Học:** Python package/import/entrypoint, Dockerfile image/container, PID/exit code, bind mount/env.
 
-**Làm:**
+**M1a — Docker foundation (đã bắt đầu bằng `hello`):**
 
 - Validate `configs/hello.yaml` bằng Pydantic, từ chối command/image/timeout sai.
 - Chạy command `hello` bằng `docker run` thủ công; đọc container ID, status, logs, exit code và xóa container sau khi quan sát.
 - Tạo Dockerfile runtime nhỏ và chạy cùng command từ image tự build; ghi Git commit SHA vào metadata/output.
 - Thêm CI build validation cho image; mỗi bước code có branch/PR riêng khi đủ nhỏ để review.
 
-**Tests:** valid/invalid config; success và intentional failure exit code; cùng command chạy ở host và Docker.
+**M1b — CPU training thật trước shared infrastructure:**
 
-**DoD:** tự giải thích được image khác container, vì sao job kết thúc, log/exit code ở đâu; Docker job thành công và thất bại quan sát được; PR/CI pass. Chưa cần PyTorch.
+- Dùng `scikit-learn` để train `LogisticRegression` cho bài toán nhị phân từ `make_classification` nhỏ (khoảng 300 samples, 8 features). Dữ liệu hoàn toàn tổng hợp; đặt seed cho data generation và train/validation split (ví dụ 80/20, stratified). Chạy CPU trong vài giây; không tải dataset ngoài.
+- Viết `examples/cpu_classifier/train.py` nhận `--output-dir` và seed; ghi `metrics.json` (ít nhất validation accuracy, số mẫu, seed, data-generator params và phiên bản scikit-learn) và `model.json` (class labels, coefficients, intercept, feature count) dưới `outputs/` local. Viết `predict.py` đọc model JSON và tạo prediction để chứng minh artifact dùng lại được. JSON chỉ chứa số/metadata; không nạp pickle/joblib do researcher cung cấp vào trusted gate.
+- Tạo `configs/cpu_train.yaml` với `experiment`/`execution`, command gọi `python examples/cpu_classifier/train.py --output-dir /outputs`. Cập nhật `Dockerfile` để copy `examples/`, thêm dependency `scikit-learn`, và thêm `outputs/` vào `.gitignore`. Trên host dùng output dir local; trong Docker bind mount output dir để artifact còn sau khi container xóa.
+- Thêm unit/smoke test có ý nghĩa: metric nằm trong `[0, 1]`, file artifact tồn tại, `predict.py` đọc model và dự đoán được, lệnh train chạy trên host và Docker. PR CI chạy training nhỏ bằng image mới và kiểm tra artifact/exit code; mỗi feature tiếp tục branch → PR → CI → merge.
+
+**Tests:** M1a valid/invalid config, success/intentional failure exit code; M1b train/validation split không trộn dữ liệu, cùng seed tái tạo input, model artifact đọc lại được. Không assert accuracy đúng một số cố định giữa các phiên bản thư viện.
+
+**DoD:** tự giải thích được image khác container và đọc logs/exit code; CPU classifier train trên host lẫn Docker, xuất metric và model artifact dùng lại được; PR CI pass. `hello` là smoke test rất nhỏ, CPU classifier là workload ML đầu tiên. PyTorch MLP phục vụ bài checkpoint nâng cao ở M5.
 
 ### M2 — Shared infrastructure: MLflow + PostgreSQL + SeaweedFS
 
@@ -999,8 +1025,8 @@ Mỗi milestone gồm **kiến thức → việc xây → test → Definition of
 
 - Compose chạy PostgreSQL, SeaweedFS, MLflow.
 - Tạo buckets qua bootstrap script.
-- Upload synthetic input/dataset `v1` với manifest/checksums.
-- Một job nhỏ tải input v1 qua S3 client, log params/metric thử nghiệm và artifact vào MLflow.
+- Upload synthetic input/dataset `v1` (generator params/seed hoặc snapshot) với manifest/checksums.
+- Cho CPU classifier M1b đọc đúng dataset v1 qua S3 client, log params/validation metric và `model.json` vào MLflow; không chỉ log một metric giả lập.
 - Tách MLflow backend DB và platform DB/schema về mặt logical ownership.
 - Thêm CI integration test dùng Compose và service DNS; giữ unit checks nhanh ở PR.
 
@@ -1024,7 +1050,7 @@ Mỗi milestone gồm **kiến thức → việc xây → test → Definition of
 
 **Tests:** hai lần submit với cùng idempotency key không tạo hai logical runs; submit invalid YAML bị reject trước khi launch; CI smoke test dùng image mới publish.
 
-**DoD:** từ CLI có thể tạo một container chạy `hello` job và theo dõi xuyên suốt mà không gõ `docker run` thủ công cho từng experiment; merge vào `main` tạo image digest và lab smoke pass.
+**DoD:** từ CLI có thể tạo container chạy `hello` hoặc CPU classifier và theo dõi xuyên suốt mà không gõ `docker run` thủ công cho từng experiment; merge vào `main` tạo image digest và lab smoke pass.
 
 **Cảnh báo lab-only:** nếu Controller truy cập Docker socket của host, coi đây là privileged development setup; chỉ bind API local, không đưa lên public internet và không chạy code lạ.
 
@@ -1035,7 +1061,7 @@ Mỗi milestone gồm **kiến thức → việc xây → test → Definition of
 **Làm:**
 
 - `CheckpointManager.save/load/latest_complete`.
-- Trước tiên dùng stateful counter job lưu step/config/input/source hash; sau khi thêm toy ML phải lưu cả model/optimizer/RNG.
+- Trước tiên dùng stateful counter job lưu step/config/input/source hash; CPU classifier M1b là one-shot training, không giả vờ hỗ trợ resume từng step. Khi thêm PyTorch toy ML phải lưu cả model/optimizer/RNG.
 - Upload checkpoint theo unique prefix + COMPLETE marker.
 - Kết thúc container đột ngột giữa counter job; retry attempt mới.
 - Nếu code/config/data không tương thích thì từ chối auto resume.
@@ -1051,7 +1077,7 @@ Mỗi milestone gồm **kiến thức → việc xây → test → Definition of
 **M5a — Research workflow:**
 
 - Tạo `round.yaml` có hypothesis, baseline/champion, max runs/gate calls, outcome; mọi run gắn `round_id` trong DB/MLflow.
-- Thêm toy PyTorch MLP CPU trên synthetic data để thực hành weight training/checkpoint; thêm mock prompt/config job trên synthetic document JSON. Mock service deterministic chỉ dùng để kiểm tra workflow, không đánh giá LLM thật.
+- Mở rộng từ CPU classifier M1b sang toy PyTorch MLP CPU trên synthetic data để thực hành weight training/checkpoint; thêm mock prompt/config job trên synthetic document JSON. Mock service deterministic chỉ dùng để kiểm tra workflow, không đánh giá LLM thật.
 - Cả hai workload dùng cùng `JobSpec`/submit/status/logs/tracking; không sửa Controller theo từng algorithm.
 
 **M5b — Evaluation và gate:**
@@ -1080,7 +1106,7 @@ Mỗi milestone gồm **kiến thức → việc xây → test → Definition of
 
 - Tạo kind cluster local, verify `kubectl get nodes`.
 - Tạo `mlops-system`, `mlops-jobs`, `mlops-gate` namespaces.
-- Tạo một `batch/v1 Job` chạy `hello` và stateful counter job, sau đó thử toy ML CPU.
+- Tạo một `batch/v1 Job` chạy CPU classifier và stateful counter job; giữ `hello` làm diagnostic smoke, sau đó thử PyTorch toy ML CPU.
 - Implement `KubernetesLauncher` từ cùng JobSpec.
 - Cấu hình endpoints của MLflow/SeaweedFS reachable **từ cluster**, không giả định Compose DNS tự xuất hiện trong kind.
 - Thử Job fail/retry và checkpoint resume.
@@ -1168,7 +1194,7 @@ Chỉ xóa branch local sau khi đã merge; xóa remote branch bằng nút GitHu
 
 **Thiết lập bảo vệ `main`:** sau khi CI workflow đã chạy thành công và có tên check ổn định, bật GitHub branch protection/ruleset yêu cầu PR và status checks, chặn force push/delete. Solo repo nên tự review diff; không đặt required approval từ người khác nếu chưa có collaborator vì sẽ tự chặn merge. Mục tiêu là tự thực hành quy trình, không tự duyệt chất lượng bằng cách bỏ qua checks.
 
-### 15.4. Docker workflow từ hello job đến toy ML
+### 15.4. Docker workflow từ hello job đến CPU classifier
 
 ```bash
 docker run --name mini-ml-hello python:3.12-slim python -c "print('hello from a job')"
@@ -1204,8 +1230,8 @@ docker compose logs -f mlflow
 **CI trên pull request** (`.github/workflows/ci.yml`):
 
 1. M0: checkout, setup Python theo phiên bản project, cài dependencies, `ruff format --check`, `ruff check`, `pytest` unit. Thêm Ruff vào dev dependencies khi workflow được tạo.
-2. M1: build Docker image, chạy hello job success/failure và kiểm tra exit code.
-3. M2–M3: dùng Compose/service containers cho Postgres/MLflow/S3 integration; chạy smoke từ CLI submit tới trạng thái cuối và artifact. Đặt timeout và dọn volumes/containers của CI run.
+2. M1a: build Docker image, chạy hello job success/failure và kiểm tra exit code. M1b: chạy CPU classifier nhỏ trong image, kiểm tra metric JSON, model JSON/prediction và artifact nằm ngoài container; giữ PR job đủ nhanh.
+3. M2–M3: dùng Compose/service containers cho Postgres/MLflow/S3 integration; CPU classifier đọc dataset version v1 và ghi params/metric/model artifact vào MLflow; chạy smoke từ CLI submit tới trạng thái cuối và artifact. Đặt timeout và dọn volumes/containers của CI run.
 4. M5–M6: thêm gate concurrency, release/rollback và kind checks có chọn lọc; giữ PR checks đủ nhanh, dời demo E2E dài sang workflow riêng nếu cần.
 
 CI chạy trên PR vào `main` và push lên `main`. Check thất bại phải chặn merge; tên check phải rõ và không trùng giữa workflows. Không chạy deploy/publish bằng credentials trên PR từ code chưa review. Review `git diff`, test output và CI logs trước merge.
@@ -1230,6 +1256,7 @@ CI chạy trên PR vào `main` và push lên `main`. Check thất bại phải c
 ### Unit tests — chạy rất nhanh, không cần Docker
 
 - Parse/validate YAML (missing fields, command invalid, negative resources).
+- CPU classifier: synthetic data/split cố định theo seed, metric hữu hạn trong `[0, 1]`, JSON model được `predict.py` đọc lại; không assert một giá trị accuracy tuyệt đối qua nhiều phiên bản thư viện.
 - Config digest ổn định khi canonicalize cùng một config.
 - State machine không cho phép transition trái luật.
 - Checkpoint manifest compatibility logic.
@@ -1250,7 +1277,7 @@ CI chạy trên PR vào `main` và push lên `main`. Check thất bại phải c
 ### E2E tests — smoke test toàn đường
 
 1. Bootstrap synthetic input/dataset v1 và mở round có hypothesis/baseline/budget.
-2. Submit `hello` rồi mock prompt/toy ML experiment qua CLI; mọi run có `round_id`.
+2. Submit CPU classifier, rồi mock prompt/PyTorch toy ML experiment qua CLI; `hello` vẫn là diagnostic smoke, mọi research run có `round_id`.
 3. Poll `SUCCEEDED` và MLflow params/metrics; verify output artifact, source/image/config/data digests.
 4. Cố tình kill stateful job, tạo attempt mới và resume từ COMPLETE checkpoint.
 5. Freeze candidate, so với champion trên cùng dev evaluation contract, submit gate.
@@ -1384,6 +1411,10 @@ README nên có:
 - FastAPI: https://fastapi.tiangolo.com/
 - Docker getting started: https://docs.docker.com/get-started/
 - Docker Compose: https://docs.docker.com/compose/
+- scikit-learn synthetic classification: https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_classification.html
+- scikit-learn train/validation split: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html
+- scikit-learn LogisticRegression: https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html
+- scikit-learn model persistence và rủi ro pickle/joblib: https://scikit-learn.org/stable/model_persistence.html
 - MLflow Tracking: https://mlflow.org/docs/latest/ml/tracking/
 - PostgreSQL: https://www.postgresql.org/docs/
 - SeaweedFS: https://github.com/seaweedfs/seaweedfs
@@ -1397,7 +1428,7 @@ README nên có:
 
 ## 22. Việc đầu tiên bạn nên làm ngay
 
-**Làm M0 và M1 trước, với job `hello` thay vì toy training.** Chưa dựng PostgreSQL/SeaweedFS/Kubernetes khi chưa tự chạy, quan sát và debug được một container job rất nhỏ.
+**M0 và bài Docker `hello` đã đặt nền. Bây giờ hoàn tất validation M1a rồi train CPU classifier ở M1b, trước khi dựng PostgreSQL/SeaweedFS/Kubernetes.** CPU classifier là workload ML thật đầu tiên; PyTorch MLP/checkpoint nâng cao vẫn ở M5.
 
 ```text
 Step 1. Dùng repo public `AI-platform-pipeline`, tạo `.venv` và project Python tối thiểu.
@@ -1406,10 +1437,14 @@ Step 3. Push branch, mở PR, xem diff; tạo CI format/lint/unit checks trướ
 Step 4. Merge PR sau khi CI pass, pull `main`, tạo branch mới cho Docker hello job.
 Step 5. Chạy hello job thủ công bằng Docker; inspect logs/status/exit code, rồi viết Dockerfile runtime.
 Step 6. Thêm test success/failure và CI Docker build; push PR và merge khi pass.
-Step 7. Ghi README: cách chạy, bằng chứng job/CI và những gì đã học; sau đó tới M2 Compose/MLflow/SeaweedFS.
+Step 7. Trên branch `feature/hello-config-validation`, hoàn tất test và validator cho image/command/timeout; PR/CI/merge, rồi cập nhật `main`.
+Step 8. Tạo branch `feature/cpu-classifier`; thêm scikit-learn và job train LogisticRegression trên synthetic data với seed/split cố định. Chạy host, xuất `metrics.json`/`model.json`, thử `predict.py` đọc lại artifact.
+Step 9. Thêm `configs/cpu_train.yaml`, copy `examples/` vào Dockerfile, bind mount output dir; train cùng workload trong container và giữ artifact sau khi container kết thúc.
+Step 10. Thêm test/CI CPU smoke, cập nhật README và `.gitignore`; push PR, yêu cầu check mới trong ruleset sau khi nó đã chạy, merge khi pass, pull `main`.
+Step 11. Sang M2: Compose + MLflow + SeaweedFS; dùng CPU classifier ghi metric/model artifact và đọc dataset v1 đã version hóa.
 ```
 
-Khi cả 7 bước hoàn tất, bắt đầu **M2: Compose + MLflow + SeaweedFS**. Toy PyTorch training và mock prompt được thêm sau khi control plane cơ bản hoạt động ở M3; counter job ở M4 dùng để học checkpoint/resume trước.
+Khi M1b hoàn tất, bắt đầu **M2: Compose + MLflow + SeaweedFS**. PyTorch training và mock prompt được thêm sau khi control plane cơ bản hoạt động ở M3; counter job ở M4 dùng để học checkpoint/resume trước.
 
 ### Câu tuyên bố hoàn thành toàn project
 
