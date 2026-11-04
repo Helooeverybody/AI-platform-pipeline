@@ -1,0 +1,8 @@
+experiment:
+  name: cpu-classifier
+
+execution:
+  backend: docker
+  runtime_image: mini-ml-runtime:dev
+  command: [python, examples/cpu_classifier/train.py, --seed, "42", --output-dir, /outputs]
+  timeout_seconds: 120
