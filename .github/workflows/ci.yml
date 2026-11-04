@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install project
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev,ml]"
 
       - name: Check format
         run: ruff format --check .
@@ -57,3 +57,27 @@ jobs:
           image_sha="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' mini-ml-runtime:ci)"
           echo "$image_sha"
           test "$image_sha" = "$(git rev-parse HEAD)"
+
+      - name: CPU training smoke test
+        run: |
+          mkdir -p outputs/ci-cpu-classifier
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --volume "$PWD/outputs/ci-cpu-classifier:/outputs" \
+            mini-ml-runtime:ci \
+            python examples/cpu_classifier/train.py --seed 42 --output-dir /outputs
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          output = Path("outputs/ci-cpu-classifier")
+          metrics = json.loads((output / "metrics.json").read_text())
+          model = json.loads((output / "model.json").read_text())
+          assert 0.0 <= metrics["validation_accuracy"] <= 1.0
+          assert metrics["train_samples"] + metrics["validation_samples"] == 300
+          assert model["n_features"] == 8
+          PY
+          docker run --rm \
+            --volume "$PWD/outputs/ci-cpu-classifier:/outputs:ro" \
+            mini-ml-runtime:ci \
+            python examples/cpu_classifier/predict.py \
+            --model /outputs/model.json --features 0 0 0 0 0 0 0 0
